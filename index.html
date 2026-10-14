@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <title>训练大师</title>
+  <meta name="description" content="个人健身与饮食规划助手">
+  <meta name="theme-color" content="#0d9488" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#042f2e" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="训练大师">
+  <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/icons/icon-192.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+  <!-- 新版本横幅 -->
+  <div id="update-banner" class="update-banner hidden">
+    <span>🚀 有新版本可用</span>
+    <button id="update-btn" class="btn btn-sm btn-light">立即更新</button>
+  </div>
+
+  <!-- iOS 添加到主屏幕引导 -->
+  <div id="install-banner" class="install-banner hidden">
+    <div class="install-text">
+      <strong>安装到主屏幕</strong>
+      <small>点击 Safari 底部分享按钮 <span class="share-glyph">⬆︎</span>，选「添加到主屏幕」，像原生 App 一样使用</small>
+    </div>
+    <button id="install-close" class="install-close">✕</button>
+  </div>
+
+  <!-- 页面挂载点 -->
+  <main id="app" class="app-main"></main>
+
+  <!-- 底部导航 -->
+  <nav id="tabbar" class="tabbar">
+    <a href="#/today" data-route="today" class="tab">
+      <span class="tab-icon">🏠</span><span class="tab-label">今天</span>
+    </a>
+    <a href="#/chat" data-route="chat" class="tab">
+      <span class="tab-icon">💬</span><span class="tab-label">对话</span>
+    </a>
+    <a href="#/plans" data-route="plans" class="tab">
+      <span class="tab-icon">📋</span><span class="tab-label">计划</span>
+    </a>
+    <a href="#/records" data-route="records" class="tab">
+      <span class="tab-icon">📊</span><span class="tab-label">记录</span>
+    </a>
+    <a href="#/profile" data-route="profile" class="tab">
+      <span class="tab-icon">👤</span><span class="tab-label">我的</span>
+    </a>
+  </nav>
+
+  <!-- Toast 容器 -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- 模态框挂载点 -->
+  <div id="modal-root"></div>
+
+  <!-- vendor：markdown 渲染与消毒（UMD，挂到 window） -->
+  <script src="./vendor/marked.min.js"></script>
+  <script src="./vendor/purify.min.js"></script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
