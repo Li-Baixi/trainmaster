@@ -142,7 +142,8 @@ export const chatPage = {
       const aiMsg = buildMessageEl('assistant', '', [], true);
       list.appendChild(aiMsg);
       const bubbleBody = aiMsg.querySelector('.bubble');
-      const typing = el('div', { class: 'typing-row' }, el('span'), el('span'), el('span'));
+      const typing = el('div', { class: 'typing-row' }, el('span'), el('span'), el('span'),
+        el('i', { style: 'font-style:normal;font-size:12px;color:var(--text-tertiary);margin-left:4px' }, '思考中…（长回答可能要等一会儿）'));
       bubbleBody.appendChild(typing);
       scrollBottom(true);
 

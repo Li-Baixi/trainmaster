@@ -143,23 +143,58 @@ export const onboardingPage = {
       generateBtn.addEventListener('click', async () => {
         if (!apiReady) { toast('请先完成 AI 服务配置', 'err'); return; }
         generateBtn.disabled = true;
+        generateBtn.classList.add('hidden');
+        resultBox.classList.remove('hidden');
+
+        // 生成过程 UI：状态行 + 思考预览 + 正文预览 + 计时
+        const statusLine = el('p', { style: 'color:var(--text-tertiary);font-size:14px;margin:0' }, '📝 正在生成个人档案…');
+        const thinkLine = el('p', {
+          style: 'font-size:12px;color:var(--text-tertiary);white-space:pre-wrap;max-height:66px;overflow:hidden;margin:8px 0 0;display:none',
+        });
+        resultBox.innerHTML = '';
+        resultBox.append(statusLine, thinkLine, resultMd);
+
+        const startedAt = Date.now();
+        const timer = setInterval(() => {
+          const s = Math.round((Date.now() - startedAt) / 1000);
+          statusLine.textContent = `${statusLine.dataset.msg}（已进行 ${s} 秒，长文生成可能要 1-3 分钟，请保持页面开着）`;
+        }, 1000);
+
+        const setStatus = (msg) => { statusLine.dataset.msg = msg; statusLine.textContent = msg; };
+        setStatus('📝 正在生成个人档案…');
+        const onDelta = (_d, full) => {
+          thinkLine.style.display = 'none';
+          setStatus('✍️ AI 正在输出，实时预览：');
+          resultMd.textContent = '';
+          renderMarkdownInto(resultMd, '```\n' + (full || '').slice(-1200) + '\n```');
+        };
+        const onReasoning = (_r, rFull) => {
+          if (thinkLine.style.display === 'none') thinkLine.style.display = 'block';
+          thinkLine.textContent = '🧠 AI 思考中：' + (rFull || '').slice(-260);
+        };
+
         try {
-          resultBox.classList.remove('hidden');
-          resultBox.innerHTML = '<p style="color:var(--text-tertiary)">📝 正在生成个人档案…</p>';
-          const onDelta = (_d, full) => { resultMd.textContent = ''; renderMarkdownInto(resultMd, '```\n' + (full || '').slice(-1200) + '\n```'); };
-          profileMd = await generateProfile(draft, onDelta);
-          resultBox.innerHTML = '<p style="color:var(--text-tertiary)">📋 档案完成，正在定制训练与饮食计划…</p>';
-          planMd = await generatePlan(profileMd, draft, onDelta);
+          profileMd = await generateProfile(draft, onDelta, null, onReasoning);
+          phase = 'plan';
+          resultMd.textContent = '';
+          thinkLine.style.display = 'none';
+          setStatus('📋 档案完成，正在定制训练与饮食计划…');
+          planMd = await generatePlan(profileMd, draft, onDelta, null, onReasoning);
+          clearInterval(timer);
           resultBox.innerHTML = '';
           resultBox.append(el('div', { class: 'card-title' }, '✅ 你的档案与计划已生成（可稍后在「我的」「计划」里查看和修改）'), resultMd);
           renderMarkdownInto(resultMd, profileMd + '\n\n---\n\n' + planMd);
           finishBtn.classList.remove('hidden');
-          generateBtn.classList.add('hidden');
         } catch (err) {
+          clearInterval(timer);
           toast(err.message || '生成失败，请重试', 'err');
-          resultBox.classList.add('hidden');
+          resultBox.innerHTML = '';
+          resultBox.append(
+            el('p', { style: 'color:var(--danger);font-size:14px;margin:0 0 4px' }, '⚠️ ' + (err.message || '生成失败')),
+            el('p', { style: 'color:var(--text-tertiary);font-size:13px;margin:0 0 8px' }, '点下面的按钮重试即可，问卷答案都还在。若多次失败，可到「设置」把对话模型换成 deepseek-flash（更快更稳）。'));
+          generateBtn.classList.remove('hidden');
           generateBtn.disabled = false;
-          generateBtn.textContent = '重新生成';
+          generateBtn.textContent = '🔄 重新生成';
         }
       });
 

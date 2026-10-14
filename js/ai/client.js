@@ -13,6 +13,31 @@ class AIError extends Error {
   }
 }
 
+/** 把用户的中止信号和一个可重置的「看门狗」计时器绑到一个内部 AbortController 上。
+ *  arm(ms) 重新计时；超时后 abort（timedOut=true），与用户主动 abort 区分开。 */
+function linkedController(userSignal, timeoutMs) {
+  const ctrl = new AbortController();
+  let timedOut = false;
+  let timer = null;
+  const onUserAbort = () => ctrl.abort();
+  if (userSignal) {
+    if (userSignal.aborted) ctrl.abort();
+    else userSignal.addEventListener('abort', onUserAbort, { once: true });
+  }
+  return {
+    signal: ctrl.signal,
+    get timedOut() { return timedOut; },
+    arm(ms = timeoutMs) {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms);
+    },
+    cleanup() {
+      if (timer) clearTimeout(timer);
+      if (userSignal) userSignal.removeEventListener('abort', onUserAbort);
+    },
+  };
+}
+
 /** 请求 Worker 的完整 URL（workerUrl + /v1/...） */
 async function workerUrl() {
   const base = await settings.getWorkerUrl();
@@ -39,16 +64,27 @@ export async function chatOnce({ provider, messages, signal, temperature = 0.7, 
   const base = await workerUrl();
   const body = { model: provider.chatModel || provider.model, messages, stream: false, temperature };
   if (maxTokens) body.max_tokens = maxTokens;
-  const res = await fetch(`${base}/v1/chat/completions`, {
-    method: 'POST',
-    signal,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${provider.apiKey}`,
-      'X-Api-Base': provider.baseUrl,
-    },
-    body: JSON.stringify(body),
-  });
+  const link = linkedController(signal, 300000); // 非流式整体最长 5 分钟
+  link.arm();
+  let res;
+  try {
+    res = await fetch(`${base}/v1/chat/completions`, {
+      method: 'POST',
+      signal: link.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${provider.apiKey}`,
+        'X-Api-Base': provider.baseUrl,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    if (link.timedOut) throw new AIError('AI 处理时间过长（超过 5 分钟）。请重试；若反复出现，可在设置里把对话模型换成 deepseek-flash（更快）。');
+    if (err.name === 'AbortError') throw err;
+    throw new AIError('网络请求失败：请检查网络，以及 Worker 地址是否正确、是否已部署。');
+  } finally {
+    link.cleanup();
+  }
   if (!res.ok) {
     let msg = '';
     try { msg = (await res.json())?.error?.message || ''; } catch { /* ignore */ }
@@ -62,20 +98,24 @@ export async function chatOnce({ provider, messages, signal, temperature = 0.7, 
 
 /**
  * 流式调用。逐字回调 onDelta，完成后返回完整文本与用量。
+ * 推理类模型（先思考后回答）思考期间回调 onReasoning，正文用 onDelta。
+ * 内置看门狗：响应头 120 秒不回、流中 90 秒无数据 → 明确报错，不会无限卡住。
  * 环境不支持 response.body 读取时自动降级为非流式。
- * { provider, model, messages, signal, onDelta, temperature, maxTokens }
+ * { provider, model, messages, signal, onDelta, onReasoning, temperature, maxTokens }
  */
-export async function chatStream({ provider, model, messages, signal, onDelta, temperature = 0.7, maxTokens }) {
+export async function chatStream({ provider, model, messages, signal, onDelta, onReasoning, temperature = 0.7, maxTokens }) {
   const useModel = model || provider.chatModel || provider.model;
   const base = await workerUrl();
   const body = { model: useModel, messages, stream: true, temperature };
   if (maxTokens) body.max_tokens = maxTokens;
 
+  const link = linkedController(signal, 120000); // 响应头最长等 2 分钟
+  link.arm();
   let res;
   try {
     res = await fetch(`${base}/v1/chat/completions`, {
       method: 'POST',
-      signal,
+      signal: link.signal,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'text/event-stream',
@@ -85,11 +125,13 @@ export async function chatStream({ provider, model, messages, signal, onDelta, t
       body: JSON.stringify(body),
     });
   } catch (err) {
+    if (link.timedOut) throw new AIError('AI 服务 2 分钟内没有响应。请点重试；若反复出现，可在设置里把模型换成 deepseek-flash（更快）。');
     if (err.name === 'AbortError') throw err;
     throw new AIError('网络请求失败：请检查网络，以及 Worker 地址是否正确、是否已部署。');
   }
 
   if (!res.ok) {
+    link.cleanup();
     let msg = '';
     try { msg = (await res.json())?.error?.message || ''; } catch { /* ignore */ }
     throw new AIError(friendlyError(res.status, msg), { status: res.status });
@@ -97,6 +139,7 @@ export async function chatStream({ provider, model, messages, signal, onDelta, t
 
   // 不支持流式读取 → 降级
   if (!res.body || typeof res.body.getReader !== 'function') {
+    link.cleanup();
     const again = await chatOnce({ provider: { ...provider, chatModel: useModel }, messages, signal, temperature, maxTokens });
     if (onDelta) onDelta(again.content);
     return { content: again.content, usage: null };
@@ -106,11 +149,14 @@ export async function chatStream({ provider, model, messages, signal, onDelta, t
   const decoder = new TextDecoder();
   let buffer = '';
   let full = '';
+  let reasoning = '';
+  link.arm(90000); // 之后：90 秒收不到任何数据视为断流
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      link.arm(90000); // 收到数据，重置看门狗
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || ''; // 留最后一段不完整行
@@ -121,7 +167,13 @@ export async function chatStream({ provider, model, messages, signal, onDelta, t
         if (!payload || payload === '[DONE]') continue;
         try {
           const evt = JSON.parse(payload);
-          const delta = evt?.choices?.[0]?.delta?.content;
+          const d = evt?.choices?.[0]?.delta;
+          const r = d?.reasoning_content ?? d?.reasoning; // 思考流（DeepSeek/OpenAI 风格）
+          if (typeof r === 'string' && r) {
+            reasoning += r;
+            if (onReasoning) onReasoning(r, reasoning);
+          }
+          const delta = d?.content;
           if (typeof delta === 'string' && delta) {
             full += delta;
             if (onDelta) onDelta(delta, full);
@@ -130,13 +182,19 @@ export async function chatStream({ provider, model, messages, signal, onDelta, t
       }
     }
   } catch (err) {
-    if (err.name === 'AbortError') throw err;
-    // 流中断且已有部分内容 → 返回已有内容；否则整体降级非流式
+    if (err.name === 'AbortError' && !link.timedOut) throw err; // 用户主动停止
     if (!full) {
+      if (link.timedOut) {
+        throw new AIError(`AI 生成中断（90 秒没有收到数据${reasoning ? '，发生在思考阶段' : ''}）。请点重试；若反复出现，可在设置里把模型换成 deepseek-flash（更快）。`);
+      }
+      // 其他读取异常 → 整体降级非流式
       const again = await chatOnce({ provider: { ...provider, chatModel: useModel }, messages, signal, temperature, maxTokens });
       if (onDelta) onDelta(again.content);
       return { content: again.content, usage: null, degraded: true };
     }
+    // 断流但已有部分内容 → 用已有内容（截断的由上层兜底报错）
+  } finally {
+    link.cleanup();
   }
 
   if (!full.trim()) {
@@ -145,7 +203,7 @@ export async function chatStream({ provider, model, messages, signal, onDelta, t
     if (onDelta) onDelta(again.content);
     return { content: again.content, usage: null, degraded: true };
   }
-  return { content: full, usage: null };
+  return { content: full, usage: null, reasoning };
 }
 
 /**

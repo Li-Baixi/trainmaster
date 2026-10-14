@@ -109,7 +109,7 @@ function extractTagged(text, tag) {
 }
 
 /** 生成个人档案（流式） */
-export async function generateProfile(answers, onDelta, signal) {
+export async function generateProfile(answers, onDelta, signal, onReasoning) {
   const provider = await settings.getDefaultProvider();
   if (!provider.apiKey) throw new Error('尚未配置 API Key，请先到设置页填写。');
   const existing = await vfs.read('profile.md');
@@ -118,6 +118,7 @@ export async function generateProfile(answers, onDelta, signal) {
     messages: [{ role: 'user', content: PROFILE_PROMPT(formatAnswers(answers), existing) }],
     signal,
     onDelta,
+    onReasoning,
     temperature: 0.4,
   });
   const md = extractTagged(content, 'profile');
@@ -126,13 +127,14 @@ export async function generateProfile(answers, onDelta, signal) {
 }
 
 /** 生成训练饮食计划（流式） */
-export async function generatePlan(profileMd, answers, onDelta, signal) {
+export async function generatePlan(profileMd, answers, onDelta, signal, onReasoning) {
   const provider = await settings.getDefaultProvider();
   const { content } = await chatStream({
     provider,
     messages: [{ role: 'user', content: PLAN_PROMPT(profileMd, formatAnswers(answers)) }],
     signal,
     onDelta,
+    onReasoning,
     temperature: 0.4,
   });
   const md = extractTagged(content, 'plan');
