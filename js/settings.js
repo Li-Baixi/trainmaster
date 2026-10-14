@@ -46,14 +46,16 @@ export const settings = {
   },
 };
 
-/** DeepSeek 预置服务商（模型名可改，以官方文档为准） */
+/** DeepSeek 预置服务商（模型名可改，以官方文档为准）
+ * 2026-10 官方在售模型：deepseek-flash（快/便宜/支持看图）、deepseek-v4-pro（更强/贵）。
+ * 默认全用 flash（识餐、日常对话够用）；想要更高质量的日常对话可在设置页改成 deepseek-v4-pro。 */
 export function defaultDeepSeekProvider() {
   return {
     id: 'deepseek',
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com',
     apiKey: '',
-    chatModel: 'deepseek-chat',
+    chatModel: 'deepseek-flash',
     visionModel: 'deepseek-flash',
     isDefault: true,
   };

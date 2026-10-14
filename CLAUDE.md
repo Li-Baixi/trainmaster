@@ -37,7 +37,7 @@ git add -A && git commit -m "..." && git push
 
 - 五段式 system prompt 在 `js/ai/context.js`；围栏协议：```plan（新计划全文）、```mealjson（识餐结果）、```profile（档案）
 - Worker 路径约定：浏览器请求 `/v1/chat/completions`，Worker 去掉 `/v1` 拼到 `X-Api-Base`。所以 provider.baseUrl 不含 /v1（DeepSeek 填 `https://api.deepseek.com`；OpenAI 官方填 `https://api.openai.com/v1`）
-- DeepSeek 模型名可能更新（当前默认 chat=deepseek-chat / vision=deepseek-flash），改动默认值在 `js/settings.js`，设置页可覆盖
+- DeepSeek 模型名可能更新（当前默认 chat=deepseek-flash / vision=deepseek-flash，2026-10 官方在售：deepseek-flash、deepseek-v4-pro），改动默认值在 `js/settings.js`，设置页可覆盖
 
 ## 用户协作事项
 

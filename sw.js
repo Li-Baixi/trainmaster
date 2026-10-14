@@ -1,7 +1,7 @@
 // Service Worker：app shell 预缓存 + 版本整批更新
 // 规则（CLAUDE.md 也有记录）：改动任何前端资产后必须递增 VERSION！
 
-const VERSION = 'tm-2026-10-14-1';
+const VERSION = 'tm-2026-10-14-2';
 const CACHE_NAME = `trainmaster-${VERSION}`;
 
 const PRECACHE = [
