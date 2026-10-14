@@ -1,0 +1,13 @@
+// Cloudflare Worker 部署配置（Workers Builds 用：推送到 main 自动部署 worker/proxy.js）
+// name 必须与 Cloudflare 上已连接的 Worker 项目名一致
+{
+  "name": "trainmaster",
+  "main": "worker/proxy.js",
+  "compatibility_date": "2025-01-01",
+  "vars": {
+    // 允许调用本 Worker 的来源（App 网址 + 本地调试）
+    "ALLOWED_ORIGINS": "https://li-baixi.github.io,http://localhost:8000",
+    // 允许转发的上游 API（只放行 DeepSeek）
+    "ALLOWED_API_BASES": "https://api.deepseek.com"
+  }
+}
